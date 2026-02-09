@@ -3,10 +3,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 import math
 
-class Attention(nn.Module):
+class AttentionSingleSentence(nn.Module):
 
     def __init__(self, text_embed_dim, q_k_v_embed_dim):
-        super(Attention, self).__init__()
+        super(AttentionSingleSentence, self).__init__()
         self.text_embed_dim = text_embed_dim
         self.q_k_v_embed_dim = q_k_v_embed_dim
         ## create learnable q,k,v matrix weights
@@ -38,3 +38,28 @@ class Attention(nn.Module):
         ## -> [len(tokenized_sentence), q_k_v_embed_dim]
         context = attention_weights @ value
         return context
+    
+class AttentionBlock(nn.Module):
+    
+    def __init__(self, text_embed_dim, q_k_v_embed_dim):
+        super(AttentionBlock, self).__init__()
+        self.text_embed_dim = text_embed_dim
+        self.q_k_v_embed_dim = q_k_v_embed_dim
+
+        self.W_q = nn.Linear(text_embed_dim, q_k_v_embed_dim)
+        self.W_k = nn.Linear(text_embed_dim, q_k_v_embed_dim)
+        self.W_v = nn.Linear(text_embed_dim, q_k_v_embed_dim)
+
+    def forward(self, x):
+        query = self.W_q(x)
+        key = self.W_k(x)
+        value = self.W_v(x)
+
+        ## as both q and k matrices are the same shape we need to transpose K to evaluate the dot product
+        attention_scores = query @ torch.transpose(key, dim0=-1, dim1=-2)
+        attention_scores = attention_scores / self.q_k_v_embed_dim**0.5
+        attention_scores = F.softmax(attention_scores, dim=-1)
+
+        context = attention_scores @ value
+        return context
+    
