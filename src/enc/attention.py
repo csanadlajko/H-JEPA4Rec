@@ -46,6 +46,9 @@ class AttentionBlock(nn.Module):
         self.text_embed_dim = text_embed_dim
         self.q_k_v_embed_dim = q_k_v_embed_dim
 
+        ## TODO handle qkv with only one linear layer
+        self.qkv = nn.Linear(text_embed_dim, q_k_v_embed_dim * 3)
+
         self.W_q = nn.Linear(text_embed_dim, q_k_v_embed_dim)
         self.W_k = nn.Linear(text_embed_dim, q_k_v_embed_dim)
         self.W_v = nn.Linear(text_embed_dim, q_k_v_embed_dim)
@@ -62,4 +65,53 @@ class AttentionBlock(nn.Module):
 
         context = attention_scores @ value
         return context
+
+class MultiHeadAttention(nn.Module):
+
+    def __init__(self, embed_dim, num_heads):
+        super(MultiHeadAttention, self).__init__()
+        self.embed_dim = embed_dim
+        assert embed_dim % num_heads == 0
+        self.num_heads = num_heads
+        head_embed_dim = embed_dim // num_heads
+
+        self.head_blocks = nn.ModuleList([
+            AttentionBlock(embed_dim, head_embed_dim)
+            for _ in range(self.num_heads)
+        ])
+        self.proj = nn.Linear(embed_dim, embed_dim)
+
+    def forward(self, x):
+
+        attn_list = []
     
+        for head in self.head_blocks:
+            ctx = head(x)
+            attn_list.append(ctx)
+            
+        attns = torch.cat(attn_list, dim=2)
+        return self.proj(attns)
+
+
+class TransformerEncoder(nn.Module):
+
+    def __init__(self, text_embed_dim, num_heads, depth):
+        super(TransformerEncoder, self).__init__()
+
+        self.mhsa_blocks = nn.ModuleList([
+            MultiHeadAttention(
+                embed_dim=text_embed_dim,
+                num_heads=num_heads
+                )
+            for _ in range(depth)
+        ])
+
+        self.norm = nn.LayerNorm(text_embed_dim)
+
+    def forward(self, x):
+        ## TODO pos. encoding needed
+        for layer in self.mhsa_blocks:
+            x = layer(x)
+        
+        x = self.norm(x)
+        return x
