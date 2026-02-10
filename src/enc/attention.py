@@ -46,9 +46,6 @@ class AttentionBlock(nn.Module):
         self.text_embed_dim = text_embed_dim
         self.q_k_v_embed_dim = q_k_v_embed_dim
 
-        ## TODO handle qkv with only one linear layer
-        self.qkv = nn.Linear(text_embed_dim, q_k_v_embed_dim * 3)
-
         self.W_q = nn.Linear(text_embed_dim, q_k_v_embed_dim)
         self.W_k = nn.Linear(text_embed_dim, q_k_v_embed_dim)
         self.W_v = nn.Linear(text_embed_dim, q_k_v_embed_dim)
@@ -68,50 +65,119 @@ class AttentionBlock(nn.Module):
 
 class MultiHeadAttention(nn.Module):
 
-    def __init__(self, embed_dim, num_heads):
+    def __init__(self, embed_dim, num_heads, dropout=0.1):
         super(MultiHeadAttention, self).__init__()
         self.embed_dim = embed_dim
         assert embed_dim % num_heads == 0
         self.num_heads = num_heads
-        head_embed_dim = embed_dim // num_heads
+        self.head_embed_dim = embed_dim // num_heads
+        self.dropout = nn.Dropout(dropout)
 
-        self.head_blocks = nn.ModuleList([
-            AttentionBlock(embed_dim, head_embed_dim)
-            for _ in range(self.num_heads)
-        ])
-        self.proj = nn.Linear(embed_dim, embed_dim)
+        self.qkv = nn.Linear(embed_dim, 3 * embed_dim)
+        self.out_proj = nn.Linear(embed_dim, embed_dim)
+
 
     def forward(self, x):
 
-        attn_list = []
+        B, T, E = x.shape
+
+        qkv = self.qkv(x)
+
+        ## reshape qkv (from [B, T, 3*EMBED_DIM]) to the following:
+        ## B: batch size
+        ## T: sequence length
+        ## N_M: q, k, v matrices -> constant 3
+        ## N_H: number of parallel heads
+        ## E_H: embedding dimension per head
+        ## N_M * N_H * E_H == 3 * EMBED DIM
+        assert 3 * self.num_heads * self.head_embed_dim == 3*self.embed_dim
+        qkv = qkv.view(B, T, 3, self.num_heads, self.head_embed_dim)
+
+        ## permute so:
+        ## query gets index 0
+        ## key gets index 1
+        ## value gets index 2
+        ## [3, B, N_H, T, E_H]
+        qkv = qkv.permute(2, 0, 3, 1, 4)
+
+        q, k, v = qkv[0], qkv[1], qkv[2]
+
+        att_scores = q @ k.transpose(-2, -1)
+        att_scores = att_scores / (self.head_embed_dim ** 0.5)
+
+        attn = F.softmax(att_scores)
+        attn = self.dropout(attn)
+
+        context = attn @ v
+        context = context.transpose(1, 2)
+        context = context.contiguous().view(B, T, E)
+
+        return self.out_proj(context)
+
+
+class MLP(nn.Module):
+
+    def __init__(self, embed_dim, mlp_embed_dim, dropout=0.1):
+        super(MLP, self).__init__()
+        self.act = nn.ReLU()
+        self.fc1 = nn.Linear(embed_dim, mlp_embed_dim)
+        self.fc2 = nn.Linear(mlp_embed_dim, embed_dim)
+        self.dropout = nn.Dropout(dropout)
     
-        for head in self.head_blocks:
-            ctx = head(x)
-            attn_list.append(ctx)
-            
-        attns = torch.cat(attn_list, dim=2)
-        return self.proj(attns)
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
 
+class TransformerEncoderLayer(nn.Module):
 
+    def __init__(self, embed_dim, num_heads, dropout=0.1, mlp_embed_dim=512):
+        super(TransformerEncoderLayer, self).__init__()
+
+        self.attn = MultiHeadAttention(embed_dim, num_heads, dropout)
+
+        self.dropout = nn.Dropout(dropout)
+        self.norm1= nn.LayerNorm(embed_dim)
+        self.norm2 = nn.LayerNorm(embed_dim)
+        self.mlp = MLP(embed_dim, mlp_embed_dim)
+
+    def forward(self, x):
+        
+        ## mhsa
+        attn = self.attn(x)
+
+        ## residual
+        x = x + self.dropout(attn)
+        x = self.norm1(x)
+
+        ## feedforward 
+        mlp_out = self.mlp(x)
+
+        ## residual
+        x = x + self.dropout(mlp_out)
+        x = self.norm2(x)
+
+        return x
+    
 class TransformerEncoder(nn.Module):
 
-    def __init__(self, text_embed_dim, num_heads, depth):
+    def __init__(self, embed_dim, num_heads, depth, mlp_dim, dropout=0.1):
         super(TransformerEncoder, self).__init__()
 
-        self.mhsa_blocks = nn.ModuleList([
-            MultiHeadAttention(
-                embed_dim=text_embed_dim,
-                num_heads=num_heads
-                )
+        ## init pos encoding
+        self.layers = nn.ModuleList([
+            TransformerEncoderLayer(embed_dim, num_heads, dropout, mlp_dim)
             for _ in range(depth)
         ])
-
-        self.norm = nn.LayerNorm(text_embed_dim)
+        self.dropout = nn.Dropout(dropout)
 
     def forward(self, x):
-        ## TODO pos. encoding needed
-        for layer in self.mhsa_blocks:
+        ## x pos enc
+        x = self.dropout(x)
+
+        for layer in self.layers:
             x = layer(x)
         
-        x = self.norm(x)
         return x
