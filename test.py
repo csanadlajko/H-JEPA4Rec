@@ -12,6 +12,9 @@ xls = pd.ExcelFile("data/retail/online_retail_II.xlsx")
 first_obs = pd.read_excel(xls, "Year 2009-2010")
 second_obs = pd.read_excel(xls, "Year 2010-2011")
 
+# groups_1 = first_obs.groupby("Invoice")
+# groups_2 = second_obs.groupby("Invoice")
+
 first_obs_label = f"<|CLS|> {first_obs['Description'][0]}"
 second_obs_label = f"<|CLS|> {second_obs['Description'][0]}"
 

@@ -2,6 +2,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import math
+from ..utils.pos_encod import positional_encoding_1d
 
 class AttentionSingleSentence(nn.Module):
 
@@ -165,18 +166,18 @@ class TransformerEncoderLayer(nn.Module):
     
 class TransformerEncoder(nn.Module):
 
-    def __init__(self, embed_dim, num_heads, depth, mlp_dim, dropout=0.1):
+    def __init__(self, embed_dim, num_heads, depth, mlp_dim, seq_len=50, dropout=0.1):
         super(TransformerEncoder, self).__init__()
 
-        ## init pos encoding
         self.layers = nn.ModuleList([
             TransformerEncoderLayer(embed_dim, num_heads, dropout, mlp_dim)
             for _ in range(depth)
         ])
         self.dropout = nn.Dropout(dropout)
+        self.pos_enc = positional_encoding_1d(embed_dim, seq_len)
 
     def forward(self, x, attention_mask):
-        ## x pos enc
+        x = x + self.pos_enc
         x = self.dropout(x)
 
         for layer in self.layers:
