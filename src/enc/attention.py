@@ -77,7 +77,7 @@ class MultiHeadAttention(nn.Module):
         self.out_proj = nn.Linear(embed_dim, embed_dim)
 
 
-    def forward(self, x):
+    def forward(self, x, attention_mask):
 
         B, T, E = x.shape
 
@@ -105,7 +105,9 @@ class MultiHeadAttention(nn.Module):
         att_scores = q @ k.transpose(-2, -1)
         att_scores = att_scores / (self.head_embed_dim ** 0.5)
 
-        attn = F.softmax(att_scores)
+        att_scores = att_scores.masked_fill(attention_mask == 0, float("-inf"))
+
+        attn = F.softmax(att_scores, dim=-1)
         attn = self.dropout(attn)
 
         context = attn @ v
@@ -143,10 +145,10 @@ class TransformerEncoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(embed_dim)
         self.mlp = MLP(embed_dim, mlp_embed_dim)
 
-    def forward(self, x):
+    def forward(self, x, attention_mask):
         
         ## mhsa
-        attn = self.attn(x)
+        attn = self.attn(x, attention_mask)
 
         ## residual
         x = x + self.dropout(attn)
@@ -173,11 +175,11 @@ class TransformerEncoder(nn.Module):
         ])
         self.dropout = nn.Dropout(dropout)
 
-    def forward(self, x):
+    def forward(self, x, attention_mask):
         ## x pos enc
         x = self.dropout(x)
 
         for layer in self.layers:
-            x = layer(x)
+            x = layer(x, attention_mask)
         
         return x
