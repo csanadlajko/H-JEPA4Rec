@@ -15,7 +15,7 @@ class NextItemEmbeddingPredictor(nn.Module):
         self.pred_next_item = nn.Parameter(torch.zeros(1, 1, pred_dim), requires_grad=True)
         
         ## learnable positional encoding for the input item sequence
-        self.item_pos_encoding = nn.Parameter(torch.zeros(1, 1, num_heads, embed_dim // num_heads), requires_grad=True)
+        self.item_pos_encoding = nn.Parameter(torch.zeros(1, num_heads, 1, embed_dim // num_heads), requires_grad=True)
 
         self.enc = TransformerEncoder(
             embed_dim=pred_dim,
@@ -43,7 +43,7 @@ class NextItemEmbeddingPredictor(nn.Module):
 
         x = self.predictor_embed(x)
 
-        sequence_encoding = self.item_pos_encoding.repeat(1, N, 1, 1)
+        sequence_encoding = self.item_pos_encoding.repeat(1, 1, N, 1)
 
         predicted_full_sequence = torch.cat([x, self.pred_next_item], dim=1)
 

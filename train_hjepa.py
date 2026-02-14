@@ -48,7 +48,7 @@ loss_fn = nn.MSELoss()
 
 optim_pred = torch.optim.AdamW(params=predictor.parameters(), lr=0.00003)
 
-embedder = nn.Embedding(tokenizer.vocab_size+2, 256)
+embedder = nn.Embedding(tokenizer.vocab_size+2, 256).to(device)
 
 i: int = 2
 session_start: int = 0
@@ -69,6 +69,12 @@ if __name__ == "__main__":
 
         ## every item in the session except the current
         enc_ctx = student_encoder(label_embed[:-1, :, :], att_masks[:-1, None, None, :])
+
+        ## drop token length -> not relevant when predicting cls token
+        ## enc_cls: a sequence of cls tokens [0, 1, ...., N-1]
+        enc_cls = enc_ctx[:, 0, :].unsqueeze(0)
+
+        predicted = predictor(enc_cls)
 
         ## every item in the session including the last
         enc_target = teacher_encoder(label_embed, att_masks[:, None, None, :])
