@@ -62,10 +62,9 @@ if __name__ == "__main__":
         label_batch = first_obs[session_start:i]["Description"]
 
         tokens = tokenizer(first_obs[session_start:i]["Description"].to_list(), return_tensors="pt", padding="max_length", max_length=50)
-        label_embed = embedder(tokens["input_ids"])
-        label_embed = label_embed.to(device)
-        att_masks = tokens["attention_mask"]
-        att_masks = att_masks.to(device)
+        input_ids = tokens["input_ids"].to(device)
+        att_masks = tokens["attention_mask"].to(device)
+        label_embed = embedder(input_ids)
 
         ## every item in the session except the current
         enc_ctx = student_encoder(label_embed[:-1, :, :], att_masks[:-1, None, None, :])
