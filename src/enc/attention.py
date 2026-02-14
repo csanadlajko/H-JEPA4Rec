@@ -78,7 +78,7 @@ class MultiHeadAttention(nn.Module):
         self.out_proj = nn.Linear(embed_dim, embed_dim)
 
 
-    def forward(self, x, attention_mask):
+    def forward(self, x, attention_mask, pred_pos_encoding):
 
         B, T, E = x.shape
 
@@ -103,10 +103,17 @@ class MultiHeadAttention(nn.Module):
 
         q, k, v = qkv[0], qkv[1], qkv[2]
 
-        att_scores = q @ k.transpose(-2, -1)
+        if pred_pos_encoding is None:
+            ## enter when decoding only item labels
+            att_scores = q @ k.transpose(-2, -1)
+        else:
+            # enter when decoding CLS item sequence for prediction
+            att_scores = (q + pred_pos_encoding) @ (k + pred_pos_encoding).transpose(-2, -1)
+            
         att_scores = att_scores / (self.head_embed_dim ** 0.5)
-
-        att_scores = att_scores.masked_fill(attention_mask == 0, float("-inf"))
+        
+        if attention_mask is not None:
+            att_scores = att_scores.masked_fill(attention_mask == 0, float("-inf"))
 
         attn = F.softmax(att_scores, dim=-1)
         attn = self.dropout(attn)
@@ -146,10 +153,10 @@ class TransformerEncoderLayer(nn.Module):
         self.norm2 = nn.LayerNorm(embed_dim)
         self.mlp = MLP(embed_dim, mlp_embed_dim)
 
-    def forward(self, x, attention_mask):
+    def forward(self, x, attention_mask, pred_pos_encoding):
         
         ## mhsa
-        attn = self.attn(x, attention_mask)
+        attn = self.attn(x, attention_mask, pred_pos_encoding)
 
         ## residual
         x = x + self.dropout(attn)
@@ -176,11 +183,12 @@ class TransformerEncoder(nn.Module):
         self.dropout = nn.Dropout(dropout)
         self.pos_enc = positional_encoding_1d(embed_dim, seq_len)
 
-    def forward(self, x, attention_mask):
-        x = x + self.pos_enc
+    def forward(self, x, attention_mask=None, pred_pos_encoding=None):
+        if pred_pos_encoding is None:
+            x = x + self.pos_enc
         x = self.dropout(x)
 
         for layer in self.layers:
-            x = layer(x, attention_mask)
+            x = layer(x, attention_mask, pred_pos_encoding)
         
         return x
