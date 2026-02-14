@@ -7,6 +7,9 @@ import copy
 import pandas as pd
 from src.utils.ema import _ema_update
 from src.parser.hjepa_argparse import parse_hjepa_args
+from datetime import datetime
+
+run_id: str = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
 args = parse_hjepa_args()
 
@@ -57,10 +60,6 @@ optim_pred = torch.optim.AdamW(params=predictor.parameters(), lr=args.lr)
 
 embedder = nn.Embedding(tokenizer.vocab_size+2, args.embed_dim).to(device)
 
-i: int = 2
-session_start: int = 0
-ctr: int = 0
-
 ## TEMPORARY TRAINING LOOP FOR TESTING MODEL BEHAVIOR
 if __name__ == "__main__":
     predictor.train()
@@ -77,6 +76,11 @@ if __name__ == "__main__":
     for j in range(args.epochs):
 
         print(f"Starting epoch: {j+1}")
+
+        total_loss = 0.0
+        i: int = 2
+        session_start: int = 0
+        ctr: int = 0
 
         while i < int(len(first_obs) * 0.8):
             curr_invoice = first_obs["Invoice"].iloc[i]
@@ -105,11 +109,15 @@ if __name__ == "__main__":
 
             loss = loss_fn(student_cls, target_cls)
 
+            total_loss += loss.item()
+
             optim_student.zero_grad()
             optim_pred.zero_grad()
             loss.backward()
             optim_student.step()
             optim_pred.step()
+
+            ctr+=1
 
             if (ctr + 1) % 5000 == 0 and args.debug == "y":
                 print(f"loss at iter {ctr + 1} is {loss.item():.4f}")
@@ -120,4 +128,13 @@ if __name__ == "__main__":
                 _ema_update(student_encoder, teacher_encoder)
             else: 
                 i+=1
-                ctr+=1
+        
+        print(f"Epoch {j+1} ended, average loss is: {total_loss / ctr:.3f}")
+
+    if args.debug == "y":
+        torch.save(student_encoder.state_dict(), f"{args.result_folder}/student_enc_{run_id}.pth")
+        torch.save(teacher_encoder.state_dict(), f"{args.result_folder}/teacher_enc_{run_id}.pth")
+        torch.save(predictor.state_dict(), f"{args.result_folder}/predictor_{run_id}.pth")
+        print("Models saved successfully!")
+
+    print("Training ended successfully...")

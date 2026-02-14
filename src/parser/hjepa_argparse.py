@@ -7,7 +7,7 @@ def parse_hjepa_args():
     parser.add_argument("--depth", help="depth of the transformer encoder module (default: 6)", type=int, default=6)
     parser.add_argument("--num_heads", help="number of heads in the MHSA module, must be a divisor of embed_dim (default: 4)", type=int, default=4)
     parser.add_argument("--input_path", help="path of the input dataset (default: None)", type=str, default=None)
-    parser.add_argument("--result_path", help="path of the result dictionary (default: /result)", type=str, default="/result")
+    parser.add_argument("--result_folder", help="path of the result folder (default: /result)", type=str, default="/result")
     parser.add_argument("--debug", help="debug mode (logging, etc..) (default: n)", type=str, default="n")
     parser.add_argument("--tokenizer", help="name of the used tokenizer (default: openai-community/gpt2)", type=str, default="openai-community/gpt2")
     parser.add_argument("--max_length", help="max length of labels with extended padding (default: 50)", type=int, default=50)
