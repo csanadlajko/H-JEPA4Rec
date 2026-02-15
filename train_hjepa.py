@@ -9,6 +9,7 @@ from src.utils.ema import _ema_update
 from src.parser.hjepa_argparse import parse_hjepa_args
 from datetime import datetime
 import torch.nn.functional as F
+from tqdm import tqdm
 
 run_id: str = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -59,6 +60,9 @@ teacher_encoder = TransformerEncoder(
 
 student_encoder = copy.deepcopy(teacher_encoder)
 
+trained_student = copy.deepcopy(student_encoder)
+trained_predictor = copy.deepcopy(predictor)
+trained_text_enc = copy.deepcopy(text_enc)
 
 student_encoder = student_encoder.to(device)
 teacher_encoder = teacher_encoder.to(device)
@@ -71,18 +75,22 @@ optim_pred = torch.optim.AdamW(params=predictor.parameters(), lr=args.lr)
 
 embedder = nn.Embedding(tokenizer.vocab_size+2, args.embed_dim).to(device)
 
+trained_embedder = copy.deepcopy(embedder)
+
 ## TEMPORARY TRAINING LOOP FOR TESTING MODEL BEHAVIOR
 if __name__ == "__main__":
     predictor.train()
     student_encoder.train()
     teacher_encoder.eval()
     text_enc.train()
+    embedder.train()
 
     if args.debug == "y":
         print(f"Architecture has: {sum(p.numel() for p in student_encoder.parameters() if p.requires_grad) + \
                                sum(p.numel() for p in teacher_encoder.parameters() if p.requires_grad) + \
                                sum(p.numel() for p in predictor.parameters() if p.requires_grad) + \
-                               sum(p.numel() for p in text_enc.parameters() if p.requires_grad)} trainable parameters.")
+                               sum(p.numel() for p in text_enc.parameters() if p.requires_grad) + \
+                               sum(p.numel() for p in embedder.parameters() if p.requires_grad)} trainable parameters.")
 
     print(f"Training for {args.epochs} epochs...")
 
@@ -94,6 +102,8 @@ if __name__ == "__main__":
         i: int = 2
         session_start: int = 0
         ctr: int = 0
+
+        bar = tqdm(total=int(len(first_obs)* 0.8))
 
         while i < int(len(first_obs) * 0.8):
             curr_invoice = first_obs["Invoice"].iloc[i]
@@ -147,9 +157,11 @@ if __name__ == "__main__":
             if i+2 <= len(first_obs) and first_obs["Invoice"].iloc[i+2] != curr_invoice:
                 session_start = i+2
                 i += 4
+                bar.update(4)
                 _ema_update(student_encoder, teacher_encoder)
-            else: 
+            else:
                 i+=1
+                bar.update(1)
         
         print(f"Epoch {j+1} ended, average loss is: {total_loss / ctr:.3f}")
 
@@ -157,6 +169,9 @@ if __name__ == "__main__":
         torch.save(student_encoder.state_dict(), f"{args.result_folder}/student_enc_{run_id}.pth")
         torch.save(teacher_encoder.state_dict(), f"{args.result_folder}/teacher_enc_{run_id}.pth")
         torch.save(predictor.state_dict(), f"{args.result_folder}/predictor_{run_id}.pth")
+        torch.save(text_enc.state_dict(), f"{args.result_folder}/txt_encoder_{run_id}.pth")
+        torch.save(embedder.state_dict(), f"{args.result_folder}/embedder_{run_id}.pth")
         print("Models saved successfully!")
 
+    bar.close()
     print("Training ended successfully...")
