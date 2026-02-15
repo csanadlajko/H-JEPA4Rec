@@ -8,6 +8,7 @@ import pandas as pd
 from src.utils.ema import _ema_update
 from src.parser.hjepa_argparse import parse_hjepa_args
 from datetime import datetime
+import torch.nn.functional as F
 
 run_id: str = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -35,7 +36,7 @@ predictor = NextItemEmbeddingPredictor(
     num_heads=args.num_heads,
     depth=args.depth,
     mlp_dim=args.ff_dim,
-    dropout=args.dropout
+    dropout=0.25
 )
 
 text_enc = TransformerEncoder(
@@ -75,11 +76,13 @@ if __name__ == "__main__":
     predictor.train()
     student_encoder.train()
     teacher_encoder.eval()
+    text_enc.train()
 
     if args.debug == "y":
         print(f"Architecture has: {sum(p.numel() for p in student_encoder.parameters() if p.requires_grad) + \
                                sum(p.numel() for p in teacher_encoder.parameters() if p.requires_grad) + \
-                               sum(p.numel() for p in predictor.parameters() if p.requires_grad)} trainable parameters.")
+                               sum(p.numel() for p in predictor.parameters() if p.requires_grad) + \
+                               sum(p.numel() for p in text_enc.parameters() if p.requires_grad)} trainable parameters.")
 
     print(f"Training for {args.epochs} epochs...")
 
@@ -123,6 +126,8 @@ if __name__ == "__main__":
                 enc_target = teacher_encoder(cls_all)
 
             target_cls = enc_target[-1, 0, :].unsqueeze(0)
+
+            target_cls = F.layer_norm(target_cls, (target_cls.size(-1),))
 
             loss = loss_fn(predicted, target_cls)
 
