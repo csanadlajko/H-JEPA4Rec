@@ -8,6 +8,7 @@ import pandas as pd
 from src.utils.ema import _ema_update
 from src.parser.hjepa_argparse import parse_hjepa_args
 from datetime import datetime
+import torch.nn.functional as F
 
 run_id: str = datetime.now().strftime("%Y-%m-%dT%H:%M:%SZ")
 
@@ -35,10 +36,10 @@ predictor = NextItemEmbeddingPredictor(
     num_heads=args.num_heads,
     depth=args.depth,
     mlp_dim=args.ff_dim,
-    dropout=args.dropout
+    dropout=0.25
 )
 
-teacher_encoder = TransformerEncoder(
+text_enc = TransformerEncoder(
     embed_dim=args.embed_dim,
     num_heads=args.num_heads,
     depth=args.depth,
@@ -47,7 +48,17 @@ teacher_encoder = TransformerEncoder(
     dropout=args.dropout
 )
 
+teacher_encoder = TransformerEncoder(
+    embed_dim=args.embed_dim,
+    num_heads=args.num_heads,
+    depth=args.depth,
+    seq_len=None,
+    mlp_dim=args.ff_dim,
+    dropout=args.dropout
+)
+
 student_encoder = copy.deepcopy(teacher_encoder)
+
 
 student_encoder = student_encoder.to(device)
 teacher_encoder = teacher_encoder.to(device)
@@ -65,11 +76,13 @@ if __name__ == "__main__":
     predictor.train()
     student_encoder.train()
     teacher_encoder.eval()
+    text_enc.train()
 
     if args.debug == "y":
         print(f"Architecture has: {sum(p.numel() for p in student_encoder.parameters() if p.requires_grad) + \
                                sum(p.numel() for p in teacher_encoder.parameters() if p.requires_grad) + \
-                               sum(p.numel() for p in predictor.parameters() if p.requires_grad)} trainable parameters.")
+                               sum(p.numel() for p in predictor.parameters() if p.requires_grad) + \
+                               sum(p.numel() for p in text_enc.parameters() if p.requires_grad)} trainable parameters.")
 
     print(f"Training for {args.epochs} epochs...")
 
@@ -92,22 +105,31 @@ if __name__ == "__main__":
             att_masks = tokens["attention_mask"].to(device)
             label_embed = embedder(input_ids)
 
+            ## text representations [B, T, D]
+            text_repr = text_enc(label_embed, att_masks[:, None, None, :])
+
+            ## all cls token in the sequence [B, D]
+            ## unsqueeze to get [1, B, D]
+            cls_all = text_repr[:, 0, :].unsqueeze(0)
+
             ## every item in the session except the current
-            enc_ctx = student_encoder(label_embed[:-1, :, :], att_masks[:-1, None, None, :])
+            ## this makes the context as [0, 1, ..., N-1] items are in the sequence
+            ## input and return shapes are [1, N-1, D]
+            enc_ctx = student_encoder(cls_all[:, :-1, :])
 
-            ## drop token length -> not relevant when predicting cls token
-            ## enc_cls: a sequence of cls tokens [0, 1, ...., N-1]
-            enc_cls = enc_ctx[:, 0, :].unsqueeze(0)
-
-            predicted = predictor(enc_cls)
+            ## input: [1, N-1, D]
+            ## returns [1, D]
+            predicted = predictor(enc_ctx)
 
             ## every item in the session including the last
-            enc_target = teacher_encoder(label_embed, att_masks[:, None, None, :])
+            with torch.no_grad():
+                enc_target = teacher_encoder(cls_all)
 
-            student_cls = enc_ctx[-1:, 0, :]
             target_cls = enc_target[-1, 0, :].unsqueeze(0)
 
-            loss = loss_fn(student_cls, target_cls)
+            target_cls = F.layer_norm(target_cls, (target_cls.size(-1),))
+
+            loss = loss_fn(predicted, target_cls)
 
             total_loss += loss.item()
 

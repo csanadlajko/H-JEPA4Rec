@@ -14,6 +14,11 @@ def parse_hjepa_args():
     parser.add_argument("--ff_dim", help="embed dim of the feed forward network in the MHSA module (default: 512)", type=int, default=512)
     parser.add_argument("--epochs", help="number of epochs when training (default: 20)", type=int, default=20)
     parser.add_argument("--dropout", help="dropout percentage in the transformer encoder module (default: 0.1)", type=float, default=0.1)
+    parser.add_argument("--num_levels", help="number of hierarchical abstraction levels (default: 2)", type=int, default=2)
+    parser.add_argument("--lambda_0", help="weight of the basic abstraction level when calculating loss (default: 1)", type=float, default=1)
+    parser.add_argument("--lambda_1", help="weight of the first abstraction level when calculating loss (default: 0)", type=float, default=0)
+    parser.add_argument("--lambda_2", help="weight of the second abstraction level when calculating loss (default: 0)", type=float, default=0)
+    parser.add_argument("--lambda_3", help="weight of the third abstraction level when calculating loss (default: 0)", type=float, default=0)
 
     args = parser.parse_args()
     return args

@@ -181,11 +181,18 @@ class TransformerEncoder(nn.Module):
             for _ in range(depth)
         ])
         self.dropout = nn.Dropout(dropout)
-        self.pos_enc = positional_encoding_1d(embed_dim, seq_len)
+        self.embed_dim = embed_dim
+        self.seq_len = seq_len
 
     def forward(self, x, attention_mask=None, pred_pos_encoding=None):
-        if pred_pos_encoding is None:
-            x = x + self.pos_enc
+        if pred_pos_encoding is None and self.seq_len is not None:
+            ## enter when adding word-level pos encoding (constant sequence length)
+            x = x + positional_encoding_1d(self.embed_dim, self.seq_len)
+        
+        elif pred_pos_encoding is None and self.seq_len is None:
+            ## enter when adding item sequence pos encoding (dynamic sequence length)
+            x = x + positional_encoding_1d(self.embed_dim, x.shape[1])
+
         x = self.dropout(x)
 
         for layer in self.layers:
