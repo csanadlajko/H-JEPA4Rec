@@ -22,6 +22,7 @@ def create_label_embedding_data(
     cls_embeds = []
 
     with torch.no_grad():
+        print("Creating description embedding list...")
         for i in tqdm(range(0, len(texts), batch_size)):
             batch_texts = texts[i:i + batch_size]
 

@@ -38,7 +38,7 @@ predictor = NextItemEmbeddingPredictor(
     depth=args.depth,
     mlp_dim=args.ff_dim,
     dropout=0.25
-)
+).to(device)
 
 text_enc = TransformerEncoder(
     embed_dim=args.embed_dim,
@@ -47,7 +47,7 @@ text_enc = TransformerEncoder(
     seq_len=args.max_length,
     mlp_dim=args.ff_dim,
     dropout=args.dropout
-)
+).to(device)
 
 teacher_encoder = TransformerEncoder(
     embed_dim=args.embed_dim,
@@ -56,17 +56,13 @@ teacher_encoder = TransformerEncoder(
     seq_len=None,
     mlp_dim=args.ff_dim,
     dropout=args.dropout
-)
+).to(device)
 
 student_encoder = copy.deepcopy(teacher_encoder)
 
 trained_student = copy.deepcopy(student_encoder)
 trained_predictor = copy.deepcopy(predictor)
 trained_text_enc = copy.deepcopy(text_enc)
-
-student_encoder = student_encoder.to(device)
-teacher_encoder = teacher_encoder.to(device)
-predictor = predictor.to(device)
 
 optim_student = torch.optim.AdamW(params=student_encoder.parameters(), lr=args.lr)
 loss_fn = nn.MSELoss()
