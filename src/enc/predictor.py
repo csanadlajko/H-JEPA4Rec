@@ -35,9 +35,10 @@ class NextItemEmbeddingPredictor(nn.Module):
             x ([1, N-1, D] Tensor): encoded item sequence in a session (context).
 
         Returns: 
-            [1, D] Tensor: corresponding for the predicted embedding for the Nth item's CLS token in the sequence.
+            [1, D] Tensor: corresponding for the updated session cls token containing information about the predicted Nth item.
         """
         ## x is [1, N-1, D]
+        ## <|SESSION_CLS|> token embedding is on index 0 [1, 0, D]
         
         N = x.shape[1] + 1
 
@@ -53,7 +54,8 @@ class NextItemEmbeddingPredictor(nn.Module):
 
         x = self.predictor_proj(x)
 
-        ## return the last predicted item of the sequence (N)
-        predicted_cls = x[:, -1, :]
+        ## return the predicted sequence's cls token
+        ## measures how the learnable Nth token influences the session's representation
+        predicted_cls = x[:, 0, :]
 
         return predicted_cls
