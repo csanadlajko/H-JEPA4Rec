@@ -54,8 +54,7 @@ class NextItemEmbeddingPredictor(nn.Module):
 
         x = self.predictor_proj(x)
 
-        ## return the predicted sequence's cls token
-        ## measures how the learnable Nth token influences the session's representation
-        predicted_cls = x[:, 0, :]
+        pred_session_cls = x[:, 0, :]
+        pred_next_item = x[:, -1, :]
 
-        return predicted_cls
+        return pred_next_item, pred_session_cls

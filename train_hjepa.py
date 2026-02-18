@@ -128,32 +128,40 @@ if __name__ == "__main__":
 
             ## input: [1, N-1, D]
             ## returns [1, D] (session cls embedding)
-            predicted = predictor(enc_ctx)
+            pred_next_item, pred_session_cls = predictor(enc_ctx)
+
+            pred_next_item = F.normalize(pred_next_item)
+            pred_session_cls = F.normalize(pred_session_cls)
 
             ## every item in the session including the last and the session cls embedding
             with torch.no_grad():
                 enc_target = teacher_encoder(cls_all)
                 ## acquire ground truth session cls embedding on index 0
-                target_cls = enc_target[:, 0, :]
-                target_cls = F.layer_norm(target_cls, (target_cls.size(-1),))
+                target_session_cls = enc_target[:, 0, :]
+                target_next_item = enc_target[:, -1, :]
+                target_session_cls = F.layer_norm(target_session_cls, (target_session_cls.size(-1),))
+                target_next_item = F.layer_norm(target_next_item, (target_next_item.size(-1),))
 
             ## the goal is to predict such next items, that fit into the current session's context
             ## if the predicted last item doesn't fit in -> larger MSE
             ## if the predicted last item fits in -> similar session cls embeddings -> smaller MSE
-            loss = loss_fn(predicted, target_cls)
+            loss_session = loss_fn(pred_session_cls, target_session_cls)
+            loss_next_item = loss_fn(pred_next_item, target_next_item)
+            
+            sum_loss = 0.6 * loss_next_item + (1-0.6) * loss_session
 
-            total_loss += loss.item()
+            total_loss += sum_loss.item()
 
             optim_student.zero_grad()
             optim_pred.zero_grad()
-            loss.backward()
+            sum_loss.backward()
             optim_student.step()
             optim_pred.step()
 
             ctr+=1
 
             if (ctr + 1) % 5000 == 0 and args.debug == "y":
-                print(f"loss at iter {ctr + 1} is {loss.item():.4f}")
+                print(f"loss at iter {ctr + 1} is {loss_session.item():.4f}")
 
             if i+2 <= len(first_obs) and first_obs["Invoice"].iloc[i+2] != curr_invoice:
                 session_start = i+2
