@@ -142,8 +142,6 @@ if __name__ == "__main__":
             ## if the predicted last item fits in -> similar session cls embeddings -> smaller MSE
             loss = loss_fn(predicted, target_cls)
 
-            print(loss.item())
-
             total_loss += loss.item()
 
             optim_student.zero_grad()
