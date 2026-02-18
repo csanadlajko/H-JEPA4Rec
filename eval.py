@@ -24,22 +24,24 @@ trained_student.eval()
 
 ## taken from invoice id 538156
 sequence = [
-    "<|CLS|> GREEN CHRISTMAS TREE CARD HOLDER",
-    "<|CLS|> HOT WATER BOTTLE TEA AND SYMPATHY",
-    "<|CLS|> NOEL WOODEN BLOCK LETTERS ",
-    "<|CLS|> CHRISTMAS CRAFT TREE TOP ANGEL",
-    "<|CLS|> CHRISTMAS CRAFT LITTLE FRIENDS",
-    "<|CLS|> 3 HOOK PHOTO SHELF ANTIQUE WHITE",
-    "<|CLS|> METAL 4 HOOK HANGER FRENCH CHATEAU",
-    "<|CLS|> BLUE OWL SOFT TOY",
-    "<|CLS|> RED STAR CARD HOLDER"
+    "<|SESSION_CLS|>",
+    "<|CLS|> FOUR HOOK  WHITE LOVEBIRDS", 
+    "<|CLS|> FELTCRAFT DOLL MARIA", 
+    "<|CLS|> FELTCRAFT DOLL ROSIE", 
+    "<|CLS|> FELTCRAFT DOLL MOLLY", 
+    "<|CLS|> POMPOM CURTAIN"
 ]
 
-# "<|CLS|> FOUR HOOK  WHITE LOVEBIRDS", 
-# "<|CLS|> FELTCRAFT DOLL MARIA", 
-# "<|CLS|> FELTCRAFT DOLL ROSIE", 
-# "<|CLS|> FELTCRAFT DOLL MOLLY", 
-# "<|CLS|> POMPOM CURTAIN"
+# "<|CLS|> GREEN CHRISTMAS TREE CARD HOLDER",
+# "<|CLS|> HOT WATER BOTTLE TEA AND SYMPATHY",
+# "<|CLS|> NOEL WOODEN BLOCK LETTERS ",
+# "<|CLS|> CHRISTMAS CRAFT TREE TOP ANGEL",
+# "<|CLS|> CHRISTMAS CRAFT LITTLE FRIENDS",
+# "<|CLS|> 3 HOOK PHOTO SHELF ANTIQUE WHITE",
+# "<|CLS|> METAL 4 HOOK HANGER FRENCH CHATEAU",
+# "<|CLS|> BLUE OWL SOFT TOY",
+# "<|CLS|> RED STAR CARD HOLDER"
+
 
 ## returned top k example (in order):
 ## 60 GOLD AND SILVER FAIRY CAKE CASES
@@ -62,14 +64,14 @@ with torch.no_grad():
 
     cls_att = trained_student(cls_tokens)
 
-    pred_cls = trained_predictor(cls_att)
+    predicted_next_item, _ = trained_predictor(cls_att)
 
 ## embs shape is [4821, 256] (all the embeddings for all the unique labels)
 embs, labels = create_label_embedding_data(first_obs, trained_embedder, tokenizer, trained_text_enc, device)
 
-sims = F.cosine_similarity(pred_cls, embs, dim=-1)
+sims = F.cosine_similarity(predicted_next_item, embs, dim=-1)
 
-k = 5
+k = 30
 vals, idxs = torch.topk(sims, k)
 
 print(f"These are the top {k} labels:")
