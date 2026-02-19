@@ -1,4 +1,4 @@
-from transformers import GPT2Tokenizer
+from transformers import GPT2Tokenizer, GPT2Model
 import torch.nn as nn
 from src.enc.attention import TransformerEncoder
 from src.enc.predictor import NextItemEmbeddingPredictor
@@ -24,6 +24,9 @@ spec_token_map = {"cls_token": "<|CLS|>", "pad_token": "<|PAD|>"}
 additional_tokens = {'additional_special_tokens': ['<|SESSION_CLS|>']}
 tokenizer.add_special_tokens(spec_token_map)
 tokenizer.add_special_tokens(additional_tokens)
+
+encoder = GPT2Model.from_pretrained("gpt2").to(device)
+encoder.resize_token_embeddings(len(tokenizer))
 
 xls = pd.ExcelFile("data/retail/online_retail_II.xlsx")
 
@@ -110,12 +113,17 @@ if __name__ == "__main__":
             label_batch.insert(0, "<|SESSION_CLS|>")
 
             tokens = tokenizer(label_batch, return_tensors="pt", padding="max_length", max_length=50)
-            input_ids = tokens["input_ids"].to(device)
-            att_masks = tokens["attention_mask"].to(device)
-            label_embed = embedder(input_ids)
+            # input_ids = tokens["input_ids"].to(device)
+            # att_masks = tokens["attention_mask"].to(device)
+            # label_embed = embedder(input_ids)
 
             ## text representations [B, T, D]
-            text_repr = text_enc(label_embed, att_masks[:, None, None, :])
+            # text_repr = text_enc(label_embed, att_masks[:, None, None, :])
+
+            text_repr = encoder(**tokens)["last_hidden_state"]
+
+            ## FFN needed from D_text_enc (768) to D_jepa_enc (256)
+            print(text_repr.shape)
 
             ## all cls token in the sequence [B, D]
             ## unsqueeze to get [1, B, D]
